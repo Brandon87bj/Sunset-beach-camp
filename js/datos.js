@@ -32,6 +32,52 @@ const misActividades = () => ACTS.filter(a => S.acts[a.id]?.guiaId === S.me?.id)
 const puedoDirigir = id => soyAdmin() || S.acts[id]?.guiaId === S.me?.id;
 const misSellos = () => ACTS.filter(a => S.miPart[a.id]?.sellado).length;
 
+/* ---------- Itinerario general del campamento ---------- */
+/* Tomado del documento "Itinerario general del campamento". act = id de la actividad (si es una de las 5). */
+const FECHA_SUGERIDA = '2026-11-26';
+const ITINERARIO = [
+  { dia:1, titulo:'Traslado, instalación y actividades', items:[
+    { hora:'8:00 a.m.', que:'Salida de la UTC hacia el lugar del campamento (Centro Recreativo Marclauri, Bahía de Matanchén, San Blas, Nay.)' },
+    { hora:'10:00 a.m.', que:'Llegada al destino, bienvenida e indicaciones generales' },
+    { hora:'10:00 – 11:00 a.m.', que:'Descarga de materiales, organización de espacios por equipo e instalación del campamento' },
+    { hora:'11:00 a.m. – 1:00 p.m.', que:'Cyclo Club · Rally Costa de Oro', act:'cyclo' },
+    { hora:'1:00 – 2:30 p.m.', que:'Tiempo para comida y descanso' },
+    { hora:'2:30 – 4:00 p.m.', que:'Essence Ceramic · Pintura en lienzos', act:'ceramic' },
+    { hora:'4:00 – 5:00 p.m.', que:'La Mesa del Barrio · Juegos de mesa', act:'mesa' },
+    { hora:'5:00 p.m. – 8:00 a.m.', que:'Sunset Beach Camp · Actividad de campamento', act:'camp', sub:[
+      { hora:'5:00 – 6:30 p.m.', que:'Organización del espacio y preparación para actividades nocturnas' },
+      { hora:'6:30 – 7:30 p.m.', que:'Cena' },
+      { hora:'7:30 – 11:00 p.m.', que:'Proyección de película, fogata y convivencia grupal' },
+      { hora:'11:00 p.m.', que:'Descanso' } ] }
+  ]},
+  { dia:2, titulo:'Actividades y regreso', items:[
+    { hora:'7:00 – 8:00 a.m.', que:'Despertar y aseo personal' },
+    { hora:'8:00 – 9:00 a.m.', que:'Desarmar y recoger casas de campaña' },
+    { hora:'9:00 – 10:00 a.m.', que:'Desayuno' },
+    { hora:'10:00 – 11:25 a.m.', que:'Spa Brûlé · Spa y relajación', act:'spa' },
+    { hora:'11:25 a.m. – 12:00 p.m.', que:'Recoger materiales restantes, limpiar y dejar el espacio en orden' },
+    { hora:'12:00 p.m.', que:'Salida del lugar' },
+    { hora:'2:00 p.m.', que:'Llegada aproximada a la UTC' }
+  ]}
+];
+
+/* "14:30" -> "2:30 p.m." */
+function hora12(h){
+  if (!h) return '';
+  let [H, M] = h.split(':').map(Number);
+  const suf = H < 12 ? 'a.m.' : 'p.m.';
+  H = H % 12 || 12;
+  return `${H}:${String(M).padStart(2,'0')} ${suf}`;
+}
+/* Horario de la actividad con hora de fin: "11:00 a.m. – 1:00 p.m." */
+function horario(a){
+  if (!a.hora) return '';
+  const [H, M] = a.hora.split(':').map(Number);
+  const fin = (H*60 + M + (a.dur || 0)) % (24*60);
+  const f = `${Math.floor(fin/60)}:${String(fin%60).padStart(2,'0')}`;
+  return a.dur ? `${hora12(a.hora)} – ${hora12(f)}` : hora12(a.hora);
+}
+
 /* ---------- Días del recorrido (2 días) ---------- */
 const diaDe = id => S.acts[id]?.dia || actById(id)?.dia || 1;
 const diasUsados = () => [...new Set(ACTS.map(a => diaDe(a.id)))].sort();

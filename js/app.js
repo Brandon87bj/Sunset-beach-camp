@@ -174,7 +174,7 @@ function vSinGrupo(){
         <h3>${fa('plus')} Crear un grupo</h3>
         <p class="muted">Quedas como admin: compartes el código y asignas una actividad a cada guía.</p>
         <div class="field"><label for="g_nombre">Nombre del grupo</label><input id="g_nombre" name="nombre" value="Grupo Sunset Beach Camp" required></div>
-        <div class="field"><label for="g_fecha">Fecha del día 1</label><input id="g_fecha" name="fecha" type="date" value="${manana()}" required>
+        <div class="field"><label for="g_fecha">Fecha del día 1</label><input id="g_fecha" name="fecha" type="date" value="${fechaSugerida()}" required>
           <span class="meta">El recorrido dura 2 días. Después podrás elegir qué actividades van cada día.</span></div>
         <button class="btn btn-terra" type="submit" ${dis()}>Crear grupo</button>
       </form>` : ''}
@@ -238,12 +238,16 @@ function tarjetaActividad(a, comoAdmin){
 }
 
 /* ---------- Fechas ---------- */
+function fechaSugerida(){
+  const hoy = new Date(); const h = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
+  return FECHA_SUGERIDA >= h ? FECHA_SUGERIDA : manana();
+}
 function manana(){
   const d = new Date(); d.setDate(d.getDate() + 1);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 /* "Día 1 · sáb 21 de nov" y "09:00", cada uno sin partirse */
-const cuando = a => `<div class="cuando"><span>${I.cal} ${esc(etiquetaDia(diaDe(a.id), true))}</span><span>${I.clock} ${esc(a.hora)}</span></div>`;
+const cuando = a => `<div class="cuando"><span>${I.cal} ${esc(etiquetaDia(diaDe(a.id), true))}</span><span>${I.clock} ${esc(horario(a))}</span></div>`;
 /* Encabezado de día dentro de una lista */
 const encabezadoDia = d => `<div class="dia-head">${I.cal} ${esc(etiquetaDia(d))}</div>`;
 /* Recorre las actividades agrupadas por día */
@@ -347,7 +351,7 @@ function vGuia(){
           : `<section class="panel"><p><b>Aún no tienes actividad asignada.</b></p><p class="muted">${admin ? 'Asígnate una en la lista de abajo.' : 'El admin del grupo te asignará una.'}</p></section>`}
 
         ${g.estado!=='esperando' ? `<div class="progress" aria-label="${n} de ${total} terminadas"><span style="width:${total ? n/total*100 : 0}%"></span></div>` : ''}
-        <span class="eyebrow">Las ${total} actividades${admin && g.estado==='esperando' ? ' · asigna guía y día a cada una' : ''}</span>
+        <span class="eyebrow">Las ${total} actividades${admin && g.estado==='esperando' ? ' · asigna un guía a cada una' : ''}</span>
         <section class="list" aria-label="Actividades del grupo">
           ${porDia((a,i)=>{
             const st = estado(a.id), info = S.acts[a.id] || {};
@@ -360,15 +364,15 @@ function vGuia(){
                   <select class="asignar" id="as_${a.id}" data-id="${a.id}" aria-label="Guía de ${esc(a.nombre)}" ${dis()}>
                     <option value="">Sin guía</option>
                     ${S.guias.map(x=>`<option value="${x.id}" ${x.id===info.guiaId?'selected':''}>${esc(x.nombre)}</option>`).join('')}
-                  </select>
-                  <select class="asignar-dia" id="dia_${a.id}" data-id="${a.id}" aria-label="Día de ${esc(a.nombre)}" ${dis()}>
-                    <option value="1" ${diaDe(a.id)===1?'selected':''}>Día 1</option>
-                    <option value="2" ${diaDe(a.id)===2?'selected':''}>Día 2</option>
                   </select></div>` : ''}
               </div>
-              ${pillEstado(st)}</div>`;
+              <div class="row-der">${pillEstado(st)}
+                <button class="btn btn-ghost btn-sm btn-info" data-act="preview" data-id="${a.id}" aria-label="Ver información de ${esc(a.nombre)}">${I.eye} Ver info</button></div></div>`;
           })}
         </section>
+        ${ui.ver.itin
+          ? `${vItinerario()}<button class="btn btn-ghost" data-act="ver" data-id="itin">${fa('chevron-up')} Ocultar itinerario</button>`
+          : `<button class="btn btn-ghost" data-act="ver" data-id="itin">${I.cal} Ver itinerario del campamento</button>`}
       </div>
     </div>
   </main>${band}`;
@@ -422,6 +426,7 @@ function vEspera(){
           <button class="btn btn-ghost btn-sm" data-act="preview" data-id="${a.id}" aria-label="Vista previa de ${esc(a.nombre)}">${I.eye} Ver</button></div>`)}
       </section>
       <div class="stack">
+        ${vItinerario()}
         ${vReglas()}
         <button class="btn btn-ghost" data-act="leave" ${dis()}>Salir del recorrido</button>
       </div>
@@ -480,7 +485,24 @@ function vPasaporte(){
   </main>${band}`;
 }
 
-function vInfo(){ return `<main class="wrap narrow"><div><h2 class="screen-title">Información</h2>${zig}</div>${vReglas()}</main>${hills}${band}`; }
+/* Itinerario completo de los 2 días; las 5 actividades se pueden tocar para ver su vista previa */
+function vItinerario(clic = true){
+  const fila = (x, sub) => `<li class="it-fila${x.act ? ' es-act' : ''}${sub ? ' sub' : ''}">
+      <span class="it-hora">${esc(x.hora)}</span>
+      <span class="it-que">${clic && x.act && actById(x.act)
+        ? `<button class="it-act" data-act="preview" data-id="${x.act}">${badge(actById(x.act), false, 26)}<span>${esc(x.que)}</span>${I.eye}</button>`
+        : x.act && actById(x.act) ? `<span class="it-act sin">${badge(actById(x.act), false, 26)}<span>${esc(x.que)}</span></span>` : esc(x.que)}</span>
+    </li>${x.sub ? x.sub.map(y=>fila(y, true)).join('') : ''}`;
+  return `<section class="panel itinerario">
+    <div class="lista-head"><h3>${I.cal} Itinerario del campamento</h3><span class="pill activa">2 días · 1 noche</span></div>
+    ${ITINERARIO.map(d=>`<div class="it-dia">
+      <div class="dia-head">${I.cal} ${esc(etiquetaDia(d.dia))} · ${esc(d.titulo)}</div>
+      <ul class="it-lista">${d.items.map(x=>fila(x,false)).join('')}</ul>
+    </div>`).join('')}
+  </section>`;
+}
+
+function vInfo(){ return `<main class="wrap narrow"><div><h2 class="screen-title">Información</h2>${zig}</div>${vItinerario()}${vReglas()}</main>${hills}${band}`; }
 
 function vFinal(){
   const n = misSellos(), total = ACTS.length;
@@ -499,7 +521,7 @@ function vDetalle(a){
                   perdida:['Actividad terminada','#8a7d70'], bloqueada:['Pendiente','#8a7d70'] }[v];
   return `<div class="det-head"><div class="wrap"><button class="back" data-act="back" aria-label="Volver">${I.back}</button>
       <h2>${esc(a.tipo)}</h2><span style="opacity:.85">${esc(a.nombre)} · Experiencia ${i+1} de ${ACTS.length}</span>
-      <span style="opacity:.85;font-size:13.5px">${I.cal} ${esc(etiquetaDia(diaDe(a.id)))} · ${esc(a.hora)}</span></div></div>
+      <span style="opacity:.85;font-size:13.5px">${I.cal} ${esc(etiquetaDia(diaDe(a.id)))} · ${esc(horario(a))}</span></div></div>
     <div class="det-bar" style="${barra[1]?`background:${barra[1]}`:''}">${barra[0]}</div>
     <main class="wrap">
       ${foto(a, 'act-foto')}
@@ -540,18 +562,19 @@ function vPreview(){
   const a = actById(ui.preview);
   if(!a) return '';
   const i = ACTS.indexOf(a), v = vistaTurista(a.id), info = S.acts[a.id] || {};
+  const guia = S.me?.rol === 'guia';
   return `<div class="overlay sheet-wrap" role="dialog" aria-modal="true" aria-labelledby="pvTitle">
     <div class="backdrop" data-act="preview-close"></div>
     <div class="sheet">
       <div class="grip" aria-hidden="true"></div>
       ${foto(a, 'act-foto pv')}
-      <div class="row" style="border:0;padding:0;background:none">${badge(a, apagada(v), 64)}
-        <div class="grow"><span class="eyebrow">Vista previa · ${i+1} de ${ACTS.length}</span>
+      <div class="row" style="border:0;padding:0;background:none">${badge(a, guia ? false : apagada(v), 64)}
+        <div class="grow"><span class="eyebrow">${guia ? 'Información' : 'Vista previa'} · ${i+1} de ${ACTS.length}</span>
           <h2 id="pvTitle" style="font-size:22px">${esc(a.nombre)}</h2><div class="meta">${esc(a.tipo)}</div></div>
         <button class="icon-btn" data-act="preview-close" aria-label="Cerrar vista previa">${I.close}</button></div>
-      <div>${chipTurista(v)}</div>
+      <div>${guia ? pillEstado(estado(a.id)) : chipTurista(v)}</div>
       <div class="pv-facts">
-        <div><b>Cuándo</b>${I.cal} ${esc(etiquetaDia(diaDe(a.id), true))} · ${esc(a.hora)}</div>
+        <div><b>Cuándo</b>${I.cal} ${esc(etiquetaDia(diaDe(a.id), true))} · ${esc(horario(a))}</div>
         <div><b>Duración</b>${I.hourglass} ${esc(duracion(a))}</div>
         <div><b>Lugar</b>${I.pin} ${esc(a.lugar || 'Por confirmar')}</div>
         <div><b>Guía</b>${I.guide} ${esc(info.guiaNombre || 'Por asignar')}</div>
@@ -560,8 +583,12 @@ function vPreview(){
       <div class="sec"><h3>${I.target} Objetivo</h3><p>${esc(a.obj)}</p></div>
       ${a.mat ? `<div class="sec"><h3>${I.box} Qué llevar</h3><p>${esc(a.mat)}</p></div>` : ''}
       ${a.seg.length ? `<div class="sec"><h3>${I.shield} Seguridad y accesibilidad</h3><ul class="tight">${a.seg.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-      ${bloqueEntrar(a)}
-      <button class="btn btn-ghost" data-act="preview-full" data-id="${a.id}">Ver detalle completo ${I.arrow}</button>
+      ${guia ? `
+        ${a.pasos.length ? `<div class="sec"><h3>${I.list} Instrucciones</h3><ol class="tight">${a.pasos.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}
+        ${a.eco ? `<div class="sec"><h3>${I.recycle} Acción sustentable</h3><p>${esc(a.eco)}</p></div>` : ''}
+        <button class="btn btn-ghost" data-act="preview-close">Cerrar</button>`
+      : `${bloqueEntrar(a)}
+      <button class="btn btn-ghost" data-act="preview-full" data-id="${a.id}">Ver detalle completo ${I.arrow}</button>`}
     </div>
   </div>`;
 }
@@ -588,7 +615,7 @@ function vista(){
   if(!configOk()) return vConfig();
   if(ui.cargando) return vCargando();
   if(!S.me) return ui.screen==='auth' ? vAuth() : vWelcome();
-  return (S.me.rol==='guia' ? vGuia() : vTurista()) + vConfirmar();
+  return (S.me.rol==='guia' ? vGuia() + (ui.confirmar ? '' : vPreview()) : vTurista()) + vConfirmar();
 }
 
 function render(){
