@@ -23,7 +23,7 @@ const I = {
   clock:fa('clock'), pin:fa('location-dot'), play:fa('play'), key:fa('key'), guide:fa('flag'), tourist:fa('person-hiking'),
   target:fa('bullseye'), hourglass:fa('hourglass-half'), text:fa('align-left'), list:fa('list-ol'), box:fa('toolbox'),
   shield:fa('shield-heart'), recycle:fa('recycle'), book:fa('book-open'), sunglasses:fa('sun'), gear:fa('gear'),
-  eye:fa('eye'), close:fa('xmark'), cal:fa('calendar-days'), warn:fa('triangle-exclamation'), door:fa('door-open'),
+  eye:fa('eye'), close:fa('xmark'), paint:fa('palette'), user:fa('circle-user'), trash:fa('trash-can'), caret:fa('chevron-down'), cal:fa('calendar-days'), warn:fa('triangle-exclamation'), door:fa('door-open'),
   r1:faSvg('far','face-frown'), r2:faSvg('far','face-smile'), r3:faSvg('far','face-grin-hearts')
 };
 const zig = '<svg class="zig" viewBox="0 0 150 10" aria-hidden="true">' +
@@ -32,14 +32,26 @@ const hills = `<div class="hills" aria-hidden="true"><svg viewBox="0 0 460 120" 
 const band = '<div class="band" aria-hidden="true"></div>';
 
 /* ---------- Estado de la UI ---------- */
-let ui = { screen:'welcome', authTab:'login', rol:'turista', err:'', tab:'ruta', detalle:null, rating:null, confirmClose:false, confirmTerm:null, preview:null, confirmar:null, ver:{}, busy:false, cargando:true, errorInicio:'', aviso:'' };
+let ui = { screen:'welcome', authTab:'login', rol:'turista', err:'', tab:'ruta', detalle:null, rating:null, confirmClose:false, confirmTerm:null, preview:null, confirmar:null, ver:{}, menu:false, busy:false, cargando:true, errorInicio:'', aviso:'' };
 let timerId = null;
 
 function toast(msg){
   const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(()=>t.hidden = true, 2600);
 }
-const badge = (a, off=false, size=56) => `<div class="badge${off?' off':''}" style="--c:${esc(a.c)};--s:${size}px" aria-hidden="true">${I[a.icon] || I.medal}</div>`;
+const badge = (a, off=false, size=56) => `<div class="badge${off?' off':''}${a.insignia?' con-img':''}" style="--c:${esc(a.c)};--s:${size}px" aria-hidden="true">${
+  a.insignia ? `<img src="${esc(a.insignia)}" alt="" loading="lazy" draggable="false">` : (I[a.icon] || I.medal)}</div>`;
+
+/* Duración como viene en el documento (ej. "De 5:00 p.m. a 8:00 a.m."); si no, se calcula de los minutos */
+function duracion(a){
+  if(a.durTexto) return a.durTexto;
+  const h = Math.floor(a.dur/60), m = a.dur%60;
+  return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
+}
+/* Lugar solo si viene en la información */
+const lugar = a => a.lugar ? ` &nbsp; ${I.pin}${esc(a.lugar)}` : '';
+/* Foto de la actividad */
+const foto = (a, cls) => a.img ? `<img class="${cls}" src="${esc(a.img)}" alt="${esc(a.nombre)}" loading="lazy">` : '';
 const dis = () => ui.busy ? 'disabled' : '';
 
 /* Traduce los errores comunes de Supabase */
@@ -59,7 +71,17 @@ function topbar(){
   const u = S.me;
   return `<header class="top"><div class="wrap topin">
     <div class="brand"><img class="brand-logo" src="${LOGO}" alt="" width="40" height="40"><span>Sunset Beach Camp</span></div>
-    <div class="who"><b>${esc(u.nombre)}</b>${u.rol==='guia'?'Guía':'Turista'}</div>
+    <div class="perfil">
+      <button class="perfil-btn" data-act="menu" aria-haspopup="true" aria-expanded="${!!ui.menu}">
+        <span class="who"><b>${esc(u.nombre)}</b>${u.rol==='guia'?'Guía':'Turista'}</span>
+        <span class="perfil-ic">${I.user}</span>
+      </button>
+      ${ui.menu ? `<div class="menu-perfil" role="menu">
+        <div class="menu-head"><b>${esc(u.nombre)}</b><span>${u.rol==='guia'?'Guía':'Turista'}</span></div>
+        <p class="menu-nota">¿Te registraste con el rol equivocado? Borra tu cuenta y vuelve a registrarte con el mismo correo.</p>
+        <button class="menu-item peligro" role="menuitem" data-act="borrar-cuenta">${I.trash} Borrar mi cuenta</button>
+      </div>` : ''}
+    </div>
     <button class="icon-btn" data-act="logout">${I.logout}Salir</button>
   </div></header>`;
 }
@@ -349,7 +371,7 @@ function vGuia(){
         </section>
       </div>
     </div>
-  </main>${band}` + vConfirmar();
+  </main>${band}`;
 }
 
 /* ---------- Turista ---------- */
@@ -385,7 +407,7 @@ function vTurista(){
     ${[['ruta','route','Ruta'],['pasaporte','medal','Pasaporte'],['info','info','Info']].map(([k,ic,t])=>
       `<button data-act="tab" data-id="${k}" ${ui.tab===k?'aria-current="page"':''}>${I[ic]}${t}</button>`).join('')}
   </nav>`;
-  return topbar() + body + nav + (vConfirmar() || vModal() || vPreview());
+  return topbar() + body + nav + (ui.confirmar ? '' : (vModal() || vPreview()));
 }
 
 function vEspera(){
@@ -396,7 +418,7 @@ function vEspera(){
         ${porDia((a,i)=>`<div class="row">${badge(a,true,48)}<div class="grow"><b>${i+1}. ${esc(a.nombre)}</b>
           <div class="meta">${esc(a.tipo)}${S.acts[a.id]?.guiaNombre ? ` · ${I.guide}${esc(S.acts[a.id].guiaNombre)}` : ''}</div>
           ${cuando(a)}
-          <div class="meta">${a.dur} min &nbsp; ${I.pin}${esc(a.lugar)}</div></div>
+          <div class="meta">${I.hourglass} ${esc(duracion(a))}${lugar(a)}</div></div>
           <button class="btn btn-ghost btn-sm" data-act="preview" data-id="${a.id}" aria-label="Vista previa de ${esc(a.nombre)}">${I.eye} Ver</button></div>`)}
       </section>
       <div class="stack">
@@ -438,8 +460,8 @@ function vRuta(){
     ${a ? `<section class="panel now">
       <div class="row" style="border:0;padding:0;background:none">${badge(a,false,60)}
         <div class="grow"><span class="eyebrow">Ahora · ${esc(etiquetaDia(diaDe(a.id), true))}</span><h3 style="font-size:20px">${esc(a.nombre)}</h3>
-        <div class="meta">${I.guide}${esc(S.acts[a.id]?.guiaNombre || '')} &nbsp; ${I.clock}${a.dur} min &nbsp; ${I.pin}${esc(a.lugar)}</div></div></div>
-      <p>${esc(a.desc)}</p>
+        <div class="meta">${I.guide}${esc(S.acts[a.id]?.guiaNombre || '')} &nbsp; ${I.hourglass} ${esc(duracion(a))}${lugar(a)}</div></div></div>
+      <p class="desc corta">${esc(a.desc)}</p>
       ${bloqueEntrar(a)}
       <button class="btn btn-ghost" data-act="detail" data-id="${a.id}">Ver actividad ${I.arrow}</button>
     </section>` : `<p class="muted" style="text-align:center">Esperando que el guía abra la siguiente experiencia.</p>`}
@@ -480,16 +502,17 @@ function vDetalle(a){
       <span style="opacity:.85;font-size:13.5px">${I.cal} ${esc(etiquetaDia(diaDe(a.id)))} · ${esc(a.hora)}</span></div></div>
     <div class="det-bar" style="${barra[1]?`background:${barra[1]}`:''}">${barra[0]}</div>
     <main class="wrap">
+      ${foto(a, 'act-foto')}
       ${bloqueEntrar(a)}
       <div class="det-grid">
         <div class="sec"><h3>${I.target} Objetivo</h3><p>${esc(a.obj)}</p></div>
         <div class="sec"><h3>${I.hourglass} Duración</h3>
-          ${st==='abierta' ? `<span class="timer" id="timer">00:00:00</span> <span class="meta">de ${a.dur} min</span>` : `<p>${a.dur} minutos</p>`}</div>
-        <div class="sec"><h3>${I.text} Descripción</h3><p>${esc(a.desc)}</p><p class="meta" style="margin-top:4px">${I.pin}${esc(a.lugar)} · ${I.guide}${esc(S.acts[a.id]?.guiaNombre || '')}</p></div>
-        <div class="sec"><h3>${I.list} Instrucciones</h3><ol class="tight">${a.pasos.map(p=>`<li>${esc(p)}</li>`).join('')}</ol></div>
-        <div class="sec"><h3>${I.box} Materiales</h3><p>${esc(a.mat)}</p></div>
-        <div class="sec"><h3>${I.shield} Seguridad y accesibilidad</h3><ul class="tight">${a.seg.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>
-        <div class="sec"><h3>${I.recycle} Acción sustentable</h3><p>${esc(a.eco)}</p></div>
+          ${st==='abierta' ? `<span class="timer" id="timer">00:00:00</span> <span class="meta">de ${esc(duracion(a))}</span>` : `<p>${esc(duracion(a))}</p>`}</div>
+        <div class="sec"><h3>${I.text} Descripción</h3><p class="desc">${esc(a.desc)}</p><p class="meta" style="margin-top:4px">${a.lugar ? `${I.pin}${esc(a.lugar)} · ` : ''}${I.guide}${esc(S.acts[a.id]?.guiaNombre || '')}</p></div>
+        ${a.pasos.length ? `<div class="sec"><h3>${I.list} Instrucciones</h3><ol class="tight">${a.pasos.map(p=>`<li>${esc(p)}</li>`).join('')}</ol></div>` : ''}
+        ${a.mat ? `<div class="sec"><h3>${I.box} Materiales</h3><p>${esc(a.mat)}</p></div>` : ''}
+        ${a.seg.length ? `<div class="sec"><h3>${I.shield} Seguridad y accesibilidad</h3><ul class="tight">${a.seg.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
+        ${a.eco ? `<div class="sec"><h3>${I.recycle} Acción sustentable</h3><p>${esc(a.eco)}</p></div>` : ''}
         <div class="phone-tip full"><span class="ph">${I.phone}</span><span>Guarda tu celular para disfrutar la actividad.</span></div>
       </div>
     </main>${hills}${band}`;
@@ -497,25 +520,17 @@ function vDetalle(a){
 
 /* Aviso de confirmación (salir del grupo / cerrar grupo) */
 function vConfirmar(){
-  if(!ui.confirmar || !S.grupo) return '';
-  const guia = S.me.rol === 'guia', g = esc(S.grupo.nombre);
-  const t = ui.confirmar === 'close'
-    ? { icono:I.warn, titulo:'¿Cerrar el grupo?', boton:'Sí, cerrar grupo',
-        texto:`Se borra <b>${g}</b> con todo su avance, sellos y evaluaciones. Los guías y turistas quedarán fuera. No se puede deshacer.` }
-    : guia
-    ? { icono:I.door, titulo:'¿Seguro que quieres salir del grupo?', boton:'Sí, salir',
-        texto:`Dejarás de dirigir tu actividad en <b>${g}</b> y el admin tendrá que asignarla a otro guía. Para regresar necesitas el código.` }
-    : { icono:I.door, titulo:'¿Seguro que quieres salir del recorrido?', boton:'Sí, salir',
-        texto:`Saldrás de <b>${g}</b>. Tus sellos se quedan guardados, pero para regresar tendrás que unirte otra vez con el código.` };
+  if(!ui.confirmar || !S.me || (!S.grupo && ui.confirmar !== 'cuenta')) return '';
+  const t = textosConfirmar(ui.confirmar);
   return `<div class="overlay" role="alertdialog" aria-modal="true" aria-labelledby="cfTitle" aria-describedby="cfText">
     <div class="backdrop" data-act="confirm-no"></div>
     <div class="modal dialogo">
-      <div class="dlg-icon ${ui.confirmar==='close'?'peligro':''}">${t.icono}</div>
-      <h2 id="cfTitle">${t.titulo}</h2>
-      <p id="cfText">${t.texto}</p>
+      <div class="dlg-icon ${t.peligro?'peligro':''}">${t.peligro ? I.warn : I.door}</div>
+      <h2 id="cfTitle">${t.title}</h2>
+      <p id="cfText">${t.html}</p>
       <div class="dlg-actions">
         <button class="btn btn-ghost" data-act="confirm-no">Cancelar</button>
-        <button class="btn btn-terra" data-act="confirm-yes" ${dis()}>${t.boton}</button>
+        <button class="btn btn-terra" data-act="confirm-yes" ${dis()}>${t.confirm}</button>
       </div>
     </div>
   </div>`;
@@ -529,6 +544,7 @@ function vPreview(){
     <div class="backdrop" data-act="preview-close"></div>
     <div class="sheet">
       <div class="grip" aria-hidden="true"></div>
+      ${foto(a, 'act-foto pv')}
       <div class="row" style="border:0;padding:0;background:none">${badge(a, apagada(v), 64)}
         <div class="grow"><span class="eyebrow">Vista previa · ${i+1} de ${ACTS.length}</span>
           <h2 id="pvTitle" style="font-size:22px">${esc(a.nombre)}</h2><div class="meta">${esc(a.tipo)}</div></div>
@@ -536,14 +552,14 @@ function vPreview(){
       <div>${chipTurista(v)}</div>
       <div class="pv-facts">
         <div><b>Cuándo</b>${I.cal} ${esc(etiquetaDia(diaDe(a.id), true))} · ${esc(a.hora)}</div>
-        <div><b>Duración</b>${I.hourglass} ${a.dur} min</div>
-        <div><b>Lugar</b>${I.pin} ${esc(a.lugar)}</div>
+        <div><b>Duración</b>${I.hourglass} ${esc(duracion(a))}</div>
+        <div><b>Lugar</b>${I.pin} ${esc(a.lugar || 'Por confirmar')}</div>
         <div><b>Guía</b>${I.guide} ${esc(info.guiaNombre || 'Por asignar')}</div>
       </div>
-      <p>${esc(a.desc)}</p>
+      <p class="desc">${esc(a.desc)}</p>
       <div class="sec"><h3>${I.target} Objetivo</h3><p>${esc(a.obj)}</p></div>
-      <div class="sec"><h3>${I.box} Qué llevar</h3><p>${esc(a.mat)}</p></div>
-      <div class="sec"><h3>${I.shield} Seguridad y accesibilidad</h3><ul class="tight">${a.seg.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>
+      ${a.mat ? `<div class="sec"><h3>${I.box} Qué llevar</h3><p>${esc(a.mat)}</p></div>` : ''}
+      ${a.seg.length ? `<div class="sec"><h3>${I.shield} Seguridad y accesibilidad</h3><ul class="tight">${a.seg.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       ${bloqueEntrar(a)}
       <button class="btn btn-ghost" data-act="preview-full" data-id="${a.id}">Ver detalle completo ${I.arrow}</button>
     </div>
@@ -572,7 +588,7 @@ function vista(){
   if(!configOk()) return vConfig();
   if(ui.cargando) return vCargando();
   if(!S.me) return ui.screen==='auth' ? vAuth() : vWelcome();
-  return S.me.rol==='guia' ? vGuia() : vTurista();
+  return (S.me.rol==='guia' ? vGuia() : vTurista()) + vConfirmar();
 }
 
 function render(){
@@ -650,6 +666,8 @@ async function entrar(){
 
 /* ---------- Clics ---------- */
 document.addEventListener('click', e=>{
+  // Cerrar el menú del perfil al tocar fuera de él
+  if(ui.menu && !e.target.closest('.menu-perfil, [data-act=menu]')){ ui.menu = false; if(!e.target.closest('[data-act]')) { render(); return; } }
   const b = e.target.closest('[data-act]'); if(!b || b.disabled) return;
   const id = b.dataset.id;
   switch(b.dataset.act){
@@ -677,7 +695,7 @@ document.addEventListener('click', e=>{
     case 'logout':
       desuscribir();
       run(cerrarSesion);
-      ui = {...ui, screen:'welcome', detalle:null, preview:null, tab:'ruta', err:'', confirmClose:false, confirmTerm:null, confirmar:null};
+      ui = {...ui, screen:'welcome', detalle:null, preview:null, tab:'ruta', err:'', confirmClose:false, confirmTerm:null, confirmar:null, menu:false};
       return;
     case 'start':        run(iniciarRecorrido, 'Recorrido iniciado. El guía de la primera actividad ya puede abrirla.'); return;
     case 'abrir':        run(()=>abrirActividad(id), `${actById(id).nombre} abierta`); return;
@@ -686,6 +704,8 @@ document.addEventListener('click', e=>{
     case 'terminar-si':  ui.confirmTerm = null; run(()=>terminarActividad(id), `${actById(id).nombre} terminada`); return;
     case 'entrar':       run(()=>entrarActividad(id), 'Entraste a la actividad'); return;
     case 'leave':        preguntar('leave'); return;
+    case 'menu':          ui.menu = !ui.menu; break;
+    case 'borrar-cuenta': ui.menu = false; render(); preguntar('cuenta'); return;
     case 'confirm-yes': { const tipo = ui.confirmar; ui.confirmar = null; confirmado(tipo); return; }
     case 'ack': {
       const valor = ui.rating;
@@ -699,7 +719,14 @@ document.addEventListener('click', e=>{
 
 /* ---------- Avisos de confirmación con SweetAlert2 ---------- */
 function textosConfirmar(tipo){
-  const guia = S.me.rol === 'guia', g = esc(S.grupo.nombre);
+  const guia = S.me.rol === 'guia', g = S.grupo ? esc(S.grupo.nombre) : '';
+  if(tipo === 'cuenta'){
+    const admin = soyAdmin();
+    return { icon:'warning', title:'¿Borrar tu cuenta?', confirm:'Sí, borrar mi cuenta', peligro:true,
+      html:`Se borra la cuenta de <b>${esc(S.me.nombre)}</b> (${guia ? 'guía' : 'turista'}) con ${guia ? 'tu lugar en los grupos' : 'tus sellos, evaluaciones y tu lugar en el recorrido'}.`
+        + (admin ? `<br><b>Eres admin de ${g}: ese grupo también se borra.</b>` : '')
+        + `<br>Después puedes registrarte otra vez con el mismo correo. <b>No se puede deshacer.</b>` };
+  }
   if(tipo === 'close') return { icon:'warning', title:'¿Cerrar el grupo?', confirm:'Sí, cerrar grupo', peligro:true,
     html:`Se borra <b>${g}</b> con todo su avance, sellos y evaluaciones.<br>Los guías y turistas quedarán fuera. <b>No se puede deshacer.</b>` };
   if(guia) return { icon:'question', title:'¿Seguro que quieres salir del grupo?', confirm:'Sí, salir',
@@ -709,13 +736,19 @@ function textosConfirmar(tipo){
 }
 
 function confirmado(tipo){
-  ui.tab = 'ruta'; ui.detalle = null; ui.preview = null;
+  ui.tab = 'ruta'; ui.detalle = null; ui.preview = null; ui.menu = false;
+  if(tipo === 'cuenta'){
+    desuscribir();
+    ui = {...ui, screen:'welcome', ver:{}, confirmTerm:null, err:''};
+    run(borrarCuenta, 'Tu cuenta se borró');
+    return;
+  }
   if(tipo === 'close') run(cerrarGrupo, 'Grupo cerrado');
   else run(salirGrupo, 'Saliste del grupo');
 }
 
 function preguntar(tipo){
-  if(!S.grupo) return;
+  if(!S.grupo && tipo !== 'cuenta') return;
   // Si SweetAlert2 no cargó (sin internet), se usa el aviso propio de la app
   if(!window.Swal){ ui.confirmar = tipo; render(); return; }
   const t = textosConfirmar(tipo);
@@ -737,7 +770,7 @@ function preguntar(tipo){
 
 /* Esc cierra la vista previa */
 document.addEventListener('keydown', e=>{
-  if(e.key==='Escape' && (ui.preview || ui.confirmar)){ ui.preview = null; ui.confirmar = null; render(); }
+  if(e.key==='Escape' && (ui.preview || ui.confirmar || ui.menu)){ ui.preview = null; ui.confirmar = null; ui.menu = false; render(); }
 });
 
 /* El admin asigna guía con el menú de cada actividad */

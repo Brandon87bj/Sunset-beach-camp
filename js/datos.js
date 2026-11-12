@@ -88,7 +88,8 @@ async function cargarActividades(){
     id: r.id, nombre: r.nombre, tipo: r.tipo, icon: r.icono, c: r.color, dia: r.dia || 1,
     hora: (r.hora || '').slice(0,5), dur: r.duracion_min, lugar: r.lugar,
     desc: r.descripcion, obj: r.objetivo, pasos: r.pasos || [], mat: r.materiales,
-    seg: r.seguridad || [], eco: r.accion_sustentable, fin: r.mensaje_final, sello: r.sello
+    seg: r.seguridad || [], eco: r.accion_sustentable, fin: r.mensaje_final, sello: r.sello,
+    img: r.imagen || null, insignia: r.insignia || null, durTexto: r.duracion_texto || null
   }));
 }
 
@@ -197,6 +198,13 @@ async function iniciarSesion(correo, pass){
 }
 
 async function cerrarSesion(){ await sb.auth.signOut(); S.me = null; limpiarGrupo(); }
+
+/* Borra la cuenta del usuario (función borrar_mi_cuenta en la base) y cierra la sesión */
+async function borrarCuenta(){
+  await rpc('borrar_mi_cuenta');
+  try { await sb.auth.signOut(); } catch(e) {}
+  S.me = null; limpiarGrupo();
+}
 
 const rpc = (fn, args) => q(sb.rpc(fn, args));
 

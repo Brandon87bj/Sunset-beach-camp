@@ -44,6 +44,7 @@ drop function if exists public.sellar(uuid, text, uuid) cascade;
 drop function if exists public.terminar_actividad(uuid, text) cascade;
 drop function if exists public.asignar_dia(uuid, text, int) cascade;
 drop function if exists public.fijar_fecha(uuid, date) cascade;
+drop function if exists public.borrar_mi_cuenta() cascade;
 
 -- =========================================================
 -- TABLAS
@@ -71,6 +72,7 @@ create table public.actividades (
   color               text not null,            -- color de la insignia
   hora                time,
   duracion_min        int  not null,
+  duracion_texto      text,                     -- cómo se muestra (ej. "De 5:00 p.m. a 8:00 a.m."); si va vacío se usa duracion_min
   lugar               text,
   descripcion         text,
   objetivo            text,
@@ -79,7 +81,9 @@ create table public.actividades (
   seguridad           text[] not null default '{}',
   accion_sustentable  text,
   mensaje_final       text,
-  sello               text
+  sello               text,
+  imagen              text,                     -- foto de la actividad (ruta dentro del proyecto)
+  insignia            text                      -- imagen redonda del sello; si va vacía se usa el ícono
 );
 
 -- Grupo (recorrido). admin_id = el guía que lo creó
@@ -428,6 +432,21 @@ grant execute on function public.terminar_actividad(uuid, text)     to authentic
 grant execute on function public.asignar_dia(uuid, text, int)       to authenticated;
 grant execute on function public.fijar_fecha(uuid, date)            to authenticated;
 
+-- Cada quien puede borrar SU propia cuenta (por ejemplo, si se registró con el rol equivocado).
+-- Se borra en cascada su perfil, sus sellos, evaluaciones, su lugar en grupos
+-- y, si era admin, los grupos que creó.
+create or replace function public.borrar_mi_cuenta()
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if auth.uid() is null then raise exception 'Inicia sesión para borrar tu cuenta.'; end if;
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+revoke all on function public.borrar_mi_cuenta() from public, anon;
+grant execute on function public.borrar_mi_cuenta() to authenticated;
+
 -- =========================================================
 -- SEGURIDAD (RLS)
 -- Los cambios de estado solo se hacen con las funciones de arriba.
@@ -490,49 +509,16 @@ end $$;
 -- DATOS: las 5 experiencias (cámbienlas con la info de cada equipo)
 -- =========================================================
 insert into public.actividades
-  (id, orden, dia, nombre, tipo, icono, color, hora, duracion_min, lugar, descripcion, objetivo, pasos, materiales, seguridad, accion_sustentable, mensaje_final, sello)
+  (id, orden, dia, nombre, tipo, icono, color, hora, duracion_min, duracion_texto, lugar, descripcion, objetivo, pasos, materiales, seguridad, accion_sustentable, mensaje_final, sello, imagen, insignia)
 values
-  ('ceramic', 1, 1, 'Essence Ceramic', 'Alfarería', 'pot', '#b26a37', '09:00', 60, 'Palapa principal',
-   'Taller de alfarería donde cada quien moldea una pieza con barro de la región.',
-   'Moldear una pieza pequeña a mano y conocer la técnica tradicional de la zona.',
-   array['Lávate las manos y ponte el mandil','Amasa el barro para sacarle el aire','Forma la base y levanta las paredes','Decora con las herramientas de la mesa','Deja tu pieza en la repisa para secado'],
-   'Barro, mandil, herramientas de modelado, agua.',
-   array['Mesa a altura accesible','Avisa si tienes alergia a la arcilla'],
-   'El barro sobrante se recicla para el siguiente grupo.',
-   '¡Tu pieza ya está secando! Te la entregamos al final.', 'Manos de barro'),
+  ('cyclo', 1, 1, 'Rally Costa de Oro', 'Cyclo Club', 'bike', '#c4502f', '09:00', 120, '1 h 30 min a 2 h', 'Playa Matanchén, San Blas, Nayarit', 'Rally recreativo compuesto por cinco estaciones físicas inspiradas en playas de Nayarit. Los participantes superarán retos de coordinación, velocidad, puntería y trabajo en equipo.', 'Promover la actividad física, la convivencia y el conocimiento de los destinos costeros de Nayarit mediante retos recreativos y colaborativos.', array['Integrarse en el equipo asignado.', 'Escuchar las indicaciones generales y de seguridad.', 'Recorrer las cinco estaciones en el orden establecido.', 'Completar cada reto respetando las reglas y colaborando con el equipo.', 'Finalizar el rally y responder la encuesta breve en la aplicación.'], 'Ropa cómoda, calzado deportivo, gorra o sombrero, protector solar y botella de agua.', array['Mantenerse hidratado.', 'Utilizar protección solar.', 'Respetar las áreas delimitadas y seguir las instrucciones de los guías.', 'Las actividades podrán adaptarse según la condición física o las necesidades de movilidad de cada participante.'], null, '¡Completaste el Rally Costa de Oro! Buen trabajo en equipo.', 'Costa de Oro', 'assets/actividades/rally.webp', 'assets/actividades/rally-sello.webp'),
 
-  ('spa', 2, 1, 'Spa Brulé', 'Spa y bienestar', 'leaf', '#5f8250', '10:15', 60, 'Área de sombra junto al mar',
-   'Sesión de relajación con estiramientos, respiración y aromaterapia con plantas locales.',
-   'Aprender una rutina corta de respiración y estiramiento para bajar el estrés.',
-   array['Elige tu tapete','Sigue la respiración guiada','Estiramientos suaves','Aromaterapia con hierbas','Hidrátate antes de salir'],
-   'Tapete, toalla, botella de agua.',
-   array['Todo el ejercicio es opcional','Hay sillas para quien no pueda estar en el piso'],
-   'Toallas de tela reutilizables, nada desechable.',
-   'Cuerpo y mente listos para lo que sigue.', 'Calma total'),
+  ('ceramic', 2, 1, 'Essence Ceramic', 'Taller de pintura', 'paint', '#b26a37', '11:30', 90, null, 'Frente al mar', 'Taller de pintura frente al mar donde los participantes crearán un lienzo inspirado en sus recuerdos y experiencias del campamento.', 'Fomentar la creatividad, la expresión personal y la conexión con el entorno mediante una actividad artística y recreativa que permita a los participantes representar sus experiencias, emociones y recuerdos del campamento a través de una pintura elaborada con materiales convencionales y elementos naturales.', array['Dirígete al área asignada para el taller.', 'Recibe tu lienzo y los materiales de pintura.', 'Escucha las indicaciones del instructor sobre la actividad y las técnicas que puedes utilizar.', 'Comienza a pintar libremente y experimenta con los colores y materiales disponibles.', 'Coloca tu nombre y título a tu obra.', 'Deja tu pintura en el espacio indicado para su revisión y exposición.'], 'Mesa de trabajo, lienzos, pintura acrílica, pinceles y servitoallas.', array['Materiales no tóxicos y de fácil manejo.', 'Atención personalizada a quienes la requieran.'], 'Reutilizar materiales y aprovechar responsablemente los elementos naturales, evitando generar residuos y contaminar el entorno.', '¡Tu obra ya forma parte de la exposición!', 'Artista del mar', 'assets/actividades/essence.webp', 'assets/actividades/essence-sello.webp'),
 
-  ('cyclo', 3, 1, 'Cyclo Club', 'Rally Costa de Oro', 'bike', '#c4502f', '11:30', 75, 'Salida en la entrada del camp',
-   'Rally en equipos por la costa con pistas en cada punto de control.',
-   'Completar el recorrido en equipo resolviendo las pistas de cada estación.',
-   array['Formen equipos de 5','Recojan su mapa y casco','Sigan la ruta marcada','Resuelvan la pista de cada estación','Regresen juntos a la meta'],
-   'Bicicleta, casco, mapa, agua.',
-   array['Casco obligatorio','Ruta alterna caminando para quien la necesite'],
-   'Recorrido sin vehículos de motor.',
-   '¡Llegaron a la meta! Buen trabajo en equipo.', 'Ruta dorada'),
+  ('mesa', 3, 1, 'La Mesa del Barrio', 'Juegos de mesa', 'dice', '#3b2a1e', '13:30', 60, null, null, 'La mesa del barrio es todo aquel lugar donde se encuentre un juego de mesa y una superficie apta para jugar, en familia o con amigos.', 'Convivir en un entorno tranquilo mediante partidas de distintos juegos de mesa.', array['Seguir y escuchar las recomendaciones de los guías establecidos en esta etapa del campamento.'], 'Juegos de mesa y mobiliario.', array['Mobiliario apropiado.'], 'Los juegos seleccionados fueron reutilizados de la infancia de cada uno de los participantes.', '¡Gracias por jugar en comunidad!', 'Buena racha', null, null),
 
-  ('mesa', 4, 2, 'La mesa del barrio', 'Juegos de mesa', 'dice', '#3b2a1e', '13:15', 60, 'Comedor techado',
-   'Juegos de mesa tradicionales mexicanos para convivir con todo el grupo.',
-   'Jugar lotería y otros juegos clásicos y conocer a los demás participantes.',
-   array['Siéntense en mesas mezcladas','Escuchen las reglas','Jueguen la primera ronda','Roten de mesa','Ronda final con premio'],
-   'Lotería, frijolitos, dados, cartas.',
-   array['Mesas con espacio para silla de ruedas','Cartas en letra grande disponibles'],
-   'Juegos de madera y cartón reutilizables.',
-   '¡Lotería! Gracias por jugar en comunidad.', 'Buena racha'),
+  ('camp', 4, 1, 'Sunset Beach Camp', 'Campamento en la playa', 'tent', '#b98a2e', '17:00', 900, 'De 5:00 p.m. a 8:00 a.m.', 'Bahía de Matanchén, San Blas, Nayarit', 'Es un campamento en la playa donde los participantes podrán disfrutar de actividades al aire libre, juegos recreativos, dinámicas grupales, fogatas y contacto con el entorno natural.', 'Ofrecer una experiencia recreativa y segura en la playa, fomentando el contacto con la naturaleza, la convivencia y el trabajo en equipo.', array['Regístrate en el punto de encuentro.', 'Instala tu tienda de campaña en el área asignada.', 'Sigue las indicaciones del personal organizador.', 'Mantén limpia tu área de campamento.', 'Mantén cerrada tu casa de campaña cuando sea momento de dormir.'], 'Cobija, almohadas, bloqueador solar, repelente, pijama o ropa cómoda, artículos de higiene personal y alguna bebida.', array['Contamos con personal capacitado.', 'Botiquín de primeros auxilios disponible.', 'Zonas de campamento señalizadas.', 'Acceso a agua potable.'], 'Cuidar el entorno natural mediante la recolección de residuos, evitar los plásticos de un solo uso y respetar la flora y fauna de la zona.', '¡Pasaste la noche bajo las estrellas! Felicidades.', 'Atardecer', 'assets/actividades/camp.webp', 'assets/actividades/camp-sello.webp'),
 
-  ('camp', 5, 2, 'Campamento', 'Campamento', 'tent', '#b98a2e', '17:30', 120, 'Zona de fogata',
-   'Armado de casas de campaña y fogata al atardecer para cerrar el día.',
-   'Armar una casa de campaña en equipo y compartir la fogata del atardecer.',
-   array['Recojan su kit de campaña','Elijan el lugar marcado','Armen la casa en equipo','Ayuden a encender la fogata','Compartan algo de su día'],
-   'Casa de campaña, linterna, repelente.',
-   array['Distancia de 3 m de la fogata','Zona plana para movilidad reducida'],
-   'Leña de poda local y basura cero en la playa.',
-   'Cerraron el día bajo el atardecer. ¡Felicidades!', 'Atardecer');
+  ('spa', 5, 2, 'Spa Brûlé', 'Spa y bienestar', 'leaf', '#5f8250', '09:00', 85, '1 h 25 min', null, 'Spa Brûlé es un establecimiento dedicado al bienestar, la relajación y el cuidado personal, que ofrece diversos tratamientos enfocados en el cuidado de la piel y la revitalización del cuerpo. Se caracteriza por el uso de productos naturales y artesanales elaborados principalmente a base de café de la región de Nayarit, así como de ingredientes como miel de abeja, azúcar natural y aceite de coco. Entre sus servicios se encuentran los masajes relajantes, tratamientos faciales, aromaterapia y exfoliaciones, complementados con productos naturales como jabones y ceras.
+
+Servicio que se ofrece: diversos servicios de relajación y cuidado personal en un espacio tranquilo utilizando productos elaborados de manera natural, como mascarillas, jabones y exfoliantes hechos con ingredientes naturales de la región. La experiencia estará enfocada en el bienestar, la relajación y el cuidado de la piel, evitando el uso de productos químicos agresivos.', 'Ofrecer servicios de relajación y cuidado personal mediante tratamientos y productos naturales que promuevan el bienestar y la salud de la piel.', array[]::text[], 'Azúcar, café, miel, aceite de coco o de bebé, blumen, recipientes para exfoliante, toalla facial y toallitas húmedas.', array[]::text[], null, 'Cuerpo y mente renovados. ¡Gracias por cerrar el recorrido con nosotros!', 'Calma total', 'assets/actividades/spa.webp', 'assets/actividades/spa-sello.webp');

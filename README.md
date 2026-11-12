@@ -16,6 +16,8 @@ sunset-beach-camp/
 ├── database/schema.sql   Tablas, permisos (RLS), funciones, Realtime y las 5 experiencias
 ├── database/reset.sql    Borra TODAS las cuentas (para dejar la base en cero)
 ├── database/migracion_dias.sql  Agrega los 2 días a una base que ya tiene datos
+├── database/actualizacion.sql   Información nueva de las actividades + borrar cuenta (para una base con datos)
+├── assets/actividades/   Fotos e insignias de cada actividad
 └── assets/logo.webp      Logo
 ```
 
@@ -47,10 +49,15 @@ Si tu base ya tenía datos antes de este cambio, corre una vez `database/migraci
 Para probar en una sola compu: cada pestaña guarda su propia sesión, así que puedes abrir una pestaña por usuario.
 Si cierras la pestaña, se cierra la sesión.
 
+## Borrar cuenta
+
+Si alguien se registró con el rol equivocado (por ejemplo, como guía siendo turista), toca el ícono de su perfil arriba a la derecha y elige **Borrar mi cuenta**. Después se puede registrar otra vez con el mismo correo. Si era admin de un grupo, ese grupo también se borra.
+
 ## Cambiar las experiencias
 
 Las actividades viven en la tabla `actividades` de Supabase (Table Editor).
-El campo `icono` acepta: `pot`, `leaf`, `bike`, `dice`, `tent` (se definen en el objeto `I` de `js/app.js`).
+El campo `icono` acepta: `paint`, `leaf`, `bike`, `dice`, `tent`, `pot` (se definen en el objeto `I` de `js/app.js`).
+`imagen` es la foto de la actividad e `insignia` la imagen redonda del sello (rutas dentro de `assets/actividades/`). Si `insignia` va vacía se usa el ícono.
 
 ## Deploy en Vercel
 

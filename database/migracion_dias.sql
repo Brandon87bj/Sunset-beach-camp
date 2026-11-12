@@ -10,7 +10,7 @@ alter table public.actividades add column if not exists dia int not null default
 do $$ begin
   alter table public.actividades add constraint actividades_dia_check check (dia in (1,2));
 exception when duplicate_object then null; end $$;
-update public.actividades set dia = case when orden <= 3 then 1 else 2 end;
+update public.actividades set dia = case when id = 'spa' then 2 else 1 end;
 
 -- Fecha del día 1 de cada grupo
 alter table public.grupos add column if not exists fecha_inicio date;
